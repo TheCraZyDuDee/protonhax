@@ -47,7 +47,14 @@ if [[ "$c" == "init" ]]; then
         exit 1
     fi
 
-    game_id=${SteamAppId:-${HEROIC_APP_ID:-${HEROIC_GAME_ID:-}}}
+    # Heroic can set SteamAppId=0; prefer its SteamGameId in that case.
+    game_id=${HEROIC_APP_ID:-${HEROIC_GAME_ID:-}}
+    if [[ -z "$game_id" && -n "${SteamAppId:-}" && "$SteamAppId" != "0" ]]; then
+        game_id="$SteamAppId"
+    fi
+    if [[ -z "$game_id" && -n "${SteamGameId:-}" && "$SteamGameId" != "0" ]]; then
+        game_id="$SteamGameId"
+    fi
     if [[ -z "$game_id" ]]; then
         game_id=$(printf '%s' "$prefix" | cksum | awk '{print "nonsteam-" $1}')
     fi
