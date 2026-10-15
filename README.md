@@ -22,9 +22,9 @@ Heroic can pass the game's launch command to a wrapper, so you should not need t
 
 Do **not** add Steam's `%COMMAND%` token in Heroic. It is specific to Steam.
 
-When the wrapper starts, protonhax reads the launch command Heroic passes to it, detects the Proton executable, and uses `STEAM_COMPAT_DATA_PATH` to find the game's prefix. It chooses an ID from launcher-provided information or derives one from the prefix. Once the game is running, use `protonhax ls` to see its ID.
+For Proton games, Heroic exports `PROTONPATH` and prefix-related environment variables. protonhax now checks `PROTONPATH` first, then falls back to detecting Proton in the launch arguments. It accepts either a Steam-style compatdata directory containing `pfx/` or a prefix path supplied directly by Heroic. It chooses an ID from launcher-provided information or derives one from the prefix. Once the game is running, use `protonhax ls` to see its ID.
 
-**Compatibility note:** Heroic's wrapper implementation and launch command can differ between versions and runner configurations. Automatic Proton detection is designed to handle common command layouts, but has not been verified against every Heroic setup. If startup fails, temporarily remove the wrapper to confirm the game still launches normally, then report the Heroic version and runner type.
+**Compatibility note:** Heroic's wrapper implementation and launch command can differ between versions and runner configurations. This integration remains experimental and has not been verified against every Heroic setup. If startup fails, temporarily remove the wrapper to confirm the game still launches normally, then report the Heroic version and runner type.
 
 ## Commands
 
@@ -49,7 +49,7 @@ For example, install it at `$HOME/.local/bin/protonhax`. Make sure the launcher 
 
 - Run `protonhax ls` while the game is running to see whether initialization succeeded.
 - If the game does not launch with the wrapper enabled, remove the wrapper and confirm the game works without it.
-- If `protonhax` reports that it cannot locate Proton, the launch command exposed by that launcher/runner may not include a directly detectable Proton path.
+- If Proton detection fails, confirm the selected Heroic runner is Proton rather than Wine.
 
 ## Contributing
 
