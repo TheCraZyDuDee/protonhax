@@ -63,9 +63,9 @@ if [[ "$c" == "init" ]]; then
 
         # Heroic's wrapper can receive the outer launcher command, with the
         # Proton invocation embedded in the --wrapper string.
-        candidate=$(printf '%s\\n' "$arg" | sed -n "s/.*'\\(.*\\/proton\\)'.*/\\1/p")
+        candidate=$(printf '%s\n' "$arg" | sed -n "s/.*'\\(.*\\/proton\\)'.*/\\1/p")
         if [[ -z "$candidate" ]]; then
-            candidate=$(printf '%s\\n' "$arg" | sed -n 's/.*"\\(.*\\/proton\\)".*/\\1/p')
+            candidate=$(printf '%s\n' "$arg" | sed -n 's/.*"\\(.*\\/proton\\)".*/\\1/p')
         fi
         if [[ -n "$candidate" && -x "$candidate" && -f "$candidate" ]]; then
             proton_exe=$candidate
