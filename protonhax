@@ -4,9 +4,8 @@ phd=${XDG_RUNTIME_DIR:-/run/user/$UID}/protonhax
 
 usage() {
     echo "Usage:"
-    echo "protonhax init <cmd> [args...]"
-    echo "protonhax init --id <id> --proton <proton-script> --prefix <prefix-path> -- <game.exe> [args...]"
-    printf "\\tWrap a Steam Proton command, or explicitly launch a game through Proton for other launchers\n"
+    echo "protonhax init <launch-command> [args...]"
+    printf "\\tWrap a Steam game or a launcher command that invokes Proton\n"
     echo "protonhax ls"
     printf "\\tLists all currently running games\n"
     echo "protonhax run <appid> <cmd> [args...]"
@@ -26,87 +25,61 @@ c=$1
 shift
 
 if [[ "$c" == "init" ]]; then
-    mode="command"
-    game_id=""
-    proton_exe=""
-    prefix=""
-
-    # Explicit mode is useful when a launcher passes the game executable
-    # rather than Steam's complete "proton ... game.exe" command.
-    if [[ "${1:-}" == "--id" || "${1:-}" == "--proton" || "${1:-}" == "--prefix" ]]; then
-        mode="explicit"
-        while [[ $# -gt 0 ]]; do
-            case "$1" in
-                --id)
-                    [[ $# -ge 2 ]] || { echo "protonhax: --id requires a value" >&2; exit 1; }
-                    game_id=$2; shift 2 ;;
-                --proton)
-                    [[ $# -ge 2 ]] || { echo "protonhax: --proton requires a path" >&2; exit 1; }
-                    proton_exe=$2; shift 2 ;;
-                --prefix)
-                    [[ $# -ge 2 ]] || { echo "protonhax: --prefix requires a path" >&2; exit 1; }
-                    prefix=$2; shift 2 ;;
-                --)
-                    shift; break ;;
-                *)
-                    echo "protonhax: unexpected init option '$1'" >&2
-                    usage; exit 1 ;;
-            esac
-        done
-        if [[ -z "$game_id" || -z "$proton_exe" || -z "$prefix" || $# -lt 1 ]]; then
-            echo "protonhax: explicit init requires --id, --proton, --prefix, -- and a game command." >&2
-            usage
-            exit 1
-        fi
-        if [[ ! -x "$proton_exe" ]]; then
-            echo "protonhax: Proton executable is not executable: $proton_exe" >&2
-            exit 1
-        fi
-        if [[ ! -d "$prefix" ]]; then
-            echo "protonhax: prefix directory does not exist: $prefix" >&2
-            exit 1
-        fi
-    else
-        if [[ $# -lt 1 ]]; then
-            echo "protonhax: init requires a launch command." >&2
-            usage
-            exit 1
-        fi
-
-        compat_data_path=${STEAM_COMPAT_DATA_PATH:-}
-        prefix=${WINEPREFIX:-}
-        if [[ -n "$compat_data_path" ]]; then
-            prefix="$compat_data_path/pfx"
-        fi
-        if [[ -z "$prefix" ]]; then
-            echo "protonhax: neither STEAM_COMPAT_DATA_PATH nor WINEPREFIX is set." >&2
-            echo "For other launchers, use explicit init options; see README.md." >&2
-            exit 1
-        fi
-
-        game_id=${SteamAppId:-${HEROIC_APP_ID:-${HEROIC_GAME_ID:-}}}
-        if [[ -z "$game_id" ]]; then
-            game_id=$(printf '%s' "$prefix" | cksum | awk '{print "nonsteam-" $1}')
-        fi
-
-        for arg in "$@"; do
-            case "$arg" in
-                */proton|*/proton-*)
-                    if [[ -x "$arg" && -f "$arg" ]]; then
-                        proton_exe=$arg
-                        break
-                    fi
-                    ;;
-            esac
-        done
-        if [[ -z "$proton_exe" ]]; then
-            echo "protonhax: could not find an executable Proton script in the launch arguments." >&2
-            echo "For other launchers, use explicit init options; see README.md." >&2
-            exit 1
-        fi
+    if [[ $# -lt 1 ]]; then
+        echo "protonhax: init requires the launch command and its arguments." >&2
+        usage
+        exit 1
     fi
 
+    compat_data_path=${STEAM_COMPAT_DATA_PATH:-}
+    prefix=${WINEPREFIX:-}
+    if [[ -n "$compat_data_path" ]]; then
+        prefix="$compat_data_path/pfx"
+    fi
+    if [[ -z "$prefix" ]]; then
+        echo "protonhax: no Proton prefix found (STEAM_COMPAT_DATA_PATH or WINEPREFIX is missing)." >&2
+        exit 1
+    fi
+
+    # Steam provides SteamAppId. Heroic provides HEROIC_APP_NAME and usually
+    # STEAM_COMPAT_DATA_PATH. Hash the prefix as a final fallback.
+    game_id=${SteamAppId:-${HEROIC_APP_ID:-${HEROIC_GAME_ID:-${HEROIC_APP_NAME:-}}}}
+    if [[ -z "$game_id" ]]; then
+        game_id=$(printf '%s' "$prefix" | cksum | awk '{print "nonsteam-" $1}')
+    fi
     game_id=${game_id//[^a-zA-Z0-9_.-]/_}
+
+    proton_exe=""
+    for arg in "$@"; do
+        # Some launchers pass Proton as its own argv item.
+        case "$arg" in
+            */proton|*/proton-*)
+                if [[ -x "$arg" && -f "$arg" ]]; then
+                    proton_exe=$arg
+                    break
+                fi
+                ;;
+        esac
+
+        # Heroic's wrapper can receive the outer launcher command, with the
+        # Proton invocation embedded in the --wrapper string.
+        candidate=$(printf '%s\\n' "$arg" | sed -n "s/.*'\\(.*\\/proton\\)'.*/\\1/p")
+        if [[ -z "$candidate" ]]; then
+            candidate=$(printf '%s\\n' "$arg" | sed -n 's/.*"\\(.*\\/proton\\)".*/\\1/p')
+        fi
+        if [[ -n "$candidate" && -x "$candidate" && -f "$candidate" ]]; then
+            proton_exe=$candidate
+            break
+        fi
+    done
+
+    if [[ -z "$proton_exe" ]]; then
+        echo "protonhax: could not locate Proton in the launch command." >&2
+        echo "If using Heroic, set the game's wrapper command to 'protonhax' and wrapper arguments to 'init'." >&2
+        echo "If this launcher does not expose a Proton path in its command, automatic detection may not be supported." >&2
+        exit 1
+    fi
+
     game_dir="$phd/$game_id"
     mkdir -p -- "$game_dir" || exit 1
     printf '%s' "$proton_exe" > "$game_dir/exe"
@@ -118,11 +91,7 @@ if [[ "$c" == "init" ]]; then
     cleanup() { rm -rf -- "$game_dir"; }
     trap cleanup EXIT
 
-    if [[ "$mode" == "explicit" ]]; then
-        "$proton_exe" run "$@"
-    else
-        "$@"
-    fi
+    "$@"
     ec=$?
     exit "$ec"
 elif [[ "$c" == "ls" ]]; then
@@ -138,7 +107,7 @@ elif [[ "$c" == "run" ]] || [[ "$c" == "cmd" ]] || [[ "$c" == "exec" ]]; then
     shift
     game_dir="$phd/$game_id"
     if [[ ! -d "$game_dir" ]]; then
-        printf 'No app running with appid "%s"\n' "$game_id"
+        printf 'No app running with appid "%s"\\n' "$game_id"
         exit 2
     fi
 
@@ -158,7 +127,7 @@ elif [[ "$c" == "run" ]] || [[ "$c" == "cmd" ]] || [[ "$c" == "exec" ]]; then
         exec "$@"
     fi
 else
-    printf 'Unknown command %s\n' "$c"
+    printf 'Unknown command %s\\n' "$c"
     usage
     exit 1
 fi
