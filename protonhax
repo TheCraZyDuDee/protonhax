@@ -43,7 +43,7 @@ if [[ "$c" == "init" ]]; then
 
     # Steam provides SteamAppId. Heroic provides HEROIC_APP_NAME and usually
     # STEAM_COMPAT_DATA_PATH. Hash the prefix as a final fallback.
-    game_id=${SteamAppId:-${HEROIC_APP_ID:-${HEROIC_GAME_ID:-${HEROIC_APP_NAME:-}}}}
+    game_id=${SteamAppId:-${HEROIC_APP_ID:-${HEROIC_GAME_ID:-}}}
     if [[ -z "$game_id" ]]; then
         game_id=$(printf '%s' "$prefix" | cksum | awk '{print "nonsteam-" $1}')
     fi
