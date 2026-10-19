@@ -43,10 +43,10 @@ run_logged() {
         return $?
     fi
     if ! { : >> "$log_file"; } 2>/dev/null; then
-        printf 'protonhax: cannot write log file: %s\\n' "$log_file" >&2
+        printf 'protonhax: cannot write log file: %s\n' "$log_file" >&2
         return 1
     fi
-    printf '\\n[%s] protonhax %s\\n' "$(date '+%Y-%m-%d %H:%M:%S %z')" "$c" >> "$log_file"
+    printf '\n[%s] protonhax %s\n' "$(date '+%Y-%m-%d %H:%M:%S %z')" "$c" >> "$log_file"
     "$@" 2>&1 | tee -a "$log_file"
     local command_status=${PIPESTATUS[0]}
     return "$command_status"
