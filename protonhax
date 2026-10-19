@@ -4,17 +4,30 @@ phd=${XDG_RUNTIME_DIR:-/run/user/$UID}/protonhax
 
 usage() {
     echo "Usage:"
-    echo "protonhax init <launch-command> [args...]"
+    echo "protonhax [--log <file>] init <launch-command> [args...]"
     printf "\\tWrap a Steam game or a launcher command that invokes Proton\n"
-    echo "protonhax ls"
+    echo "protonhax [--log <file>] ls"
     printf "\\tLists all currently running games\n"
-    echo "protonhax run <appid> <cmd> [args...]"
+    echo "protonhax [--log <file>] run <appid> <cmd> [args...]"
     printf "\\tRuns <cmd> in the context of <appid> with Proton\n"
-    echo "protonhax cmd <appid>"
+    echo "protonhax [--log <file>] cmd <appid>"
     printf "\\tRuns cmd.exe in the context of <appid>\n"
-    echo "protonhax exec <appid> <cmd> [args...]"
+    echo "protonhax [--log <file>] exec <appid> <cmd> [args...]"
     printf "\\tRuns <cmd> in the context of <appid>\n"
+    echo
+    echo "Alternatively, set PROTONHAX_LOG=<file> to log all protonhax-launched output."
 }
+
+log_file=${PROTONHAX_LOG:-}
+if [[ "${1:-}" == "--log" ]]; then
+    if [[ $# -lt 3 || -z "$2" ]]; then
+        echo "protonhax: --log requires a file path and a command." >&2
+        usage
+        exit 1
+    fi
+    log_file=$2
+    shift 2
+fi
 
 if [[ $# -lt 1 ]]; then
     usage
@@ -23,6 +36,21 @@ fi
 
 c=$1
 shift
+
+run_logged() {
+    if [[ -z "$log_file" ]]; then
+        "$@"
+        return $?
+    fi
+    if ! { : >> "$log_file"; } 2>/dev/null; then
+        printf 'protonhax: cannot write log file: %s\\n' "$log_file" >&2
+        return 1
+    fi
+    printf '\\n[%s] protonhax %s\\n' "$(date '+%Y-%m-%d %H:%M:%S %z')" "$c" >> "$log_file"
+    "$@" 2>&1 | tee -a "$log_file"
+    local command_status=${PIPESTATUS[0]}
+    return "$command_status"
+}
 
 if [[ "$c" == "init" ]]; then
     if [[ $# -lt 1 ]]; then
@@ -112,7 +140,7 @@ if [[ "$c" == "init" ]]; then
     cleanup() { rm -rf -- "$game_dir"; }
     trap cleanup EXIT
 
-    "$@"
+    run_logged "$@"
     ec=$?
     exit "$ec"
 elif [[ "$c" == "ls" ]]; then
@@ -140,12 +168,15 @@ elif [[ "$c" == "run" ]] || [[ "$c" == "cmd" ]] || [[ "$c" == "exec" ]]; then
 
     if [[ "$c" == "run" ]]; then
         [[ $# -ge 1 ]] || { usage; exit 1; }
-        exec "$proton_exe" run "$@"
+        run_logged "$proton_exe" run "$@"
+        exit $?
     elif [[ "$c" == "cmd" ]]; then
-        exec "$proton_exe" run "$prefix/drive_c/windows/system32/cmd.exe"
+        run_logged "$proton_exe" run "$prefix/drive_c/windows/system32/cmd.exe"
+        exit $?
     else
         [[ $# -ge 1 ]] || { usage; exit 1; }
-        exec "$@"
+        run_logged "$@"
+        exit $?
     fi
 else
     printf 'Unknown command %s\\n' "$c"
