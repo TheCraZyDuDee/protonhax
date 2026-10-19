@@ -1,104 +1,56 @@
 # protonhax
 
-Tool to help running other programs (i.e. Cheat Engine) inside Steam's proton.
+Run helper programs (for example, Cheat Engine) in a game's Proton environment.
 
-## Usage
-Set the steam game launch options to `protonhax init %COMMAND%`
+## Steam setup
 
-On your Steam Library:
-- Right-click the game > Properties > General.
-- Set Launch Options as `protonhax init %COMMAND%`.
+Set the game's Launch Options to:
 
-Now, you can use your terminal to run the following commands:
+```sh
+protonhax init %COMMAND%
+```
 
-- To list all running appids use\
-`protonhax ls`
+## Heroic Games Launcher setup (experimental)
 
-- To run a program with proton use\
-`protonhax run <appid> <path/to/program> [args...]`\
-NOTE: The PATH variable is ignored
+Heroic can pass the game's launch command to a wrapper, so you should not need to enter a Proton path, prefix path, or game ID manually.
 
-- To run cmd.exe use\
-`protonhax cmd <appid>`
+1. Make sure `protonhax` is executable and on a path Heroic can access.
+2. Open the game's settings in Heroic and find its **Wrapper command** settings.
+3. Set the wrapper command/executable to the full path to `protonhax` (for example, `/home/your-user/.local/bin/protonhax`).
+4. Set the wrapper arguments to `init`.
+5. Save and launch the game.
 
-- To run a program natively with the environment variables that were used to launch the game originally use\
-`protonhax exec <appid> <path/to/program> [args...]`\
-NOTE: The PATH variable is ignored
+Do **not** add Steam's `%COMMAND%` token in Heroic. It is specific to Steam.
+
+For Proton games, Heroic exports `PROTONPATH` and prefix-related environment variables. protonhax now checks `PROTONPATH` first, then falls back to detecting Proton in the launch arguments. It accepts either a Steam-style compatdata directory containing `pfx/` or a prefix path supplied directly by Heroic. It chooses an ID from launcher-provided information or derives one from the prefix. Once the game is running, use `protonhax ls` to see its ID.
+
+**Compatibility note:** Heroic's wrapper implementation and launch command can differ between versions and runner configurations. This integration remains experimental and has not been verified against every Heroic setup. If startup fails, temporarily remove the wrapper to confirm the game still launches normally, then report the Heroic version and runner type.
+
+## Commands
+
+- List running games: `protonhax ls`
+- Run a Windows program through the game's Proton: `protonhax run <id> <path/to/program.exe> [args...]`
+- Open Windows command prompt: `protonhax cmd <id>`
+- Run a native Linux program with the game's launch environment: `protonhax exec <id> <path/to/program> [args...]`
+
+Use full executable paths; these commands do not resolve programs through `PATH`.
 
 ## Installation
 
-**protonhax** is currently a single bash script, you just need to add it to your $PATH. 
+`protonhax` is a single Bash script. Copy it to a directory on your `PATH` and make it executable:
 
-1. Either clone our repo `https://github.com/jcnils/protonhax.git`, or download the source from our [release page](https://github.com/jcnils/protonhax/releases)
-2. Copy the **protonhax** file to where you preffer and give it permission to execute:
-    - Example of locations `$HOME/.local/bin/protonhax`, `/usr/bin/protonhax`. They need to be on your $PATH
-    - Permission `chmod 755 protonhax`.
-
-### Arch Linux
-- https://aur.archlinux.org/packages/protonhax
-- https://aur.archlinux.org/packages/protonhax-git/
-
-## Debug and Troubleshoot
-
-### Enable *protonhax* log
-
-Open the `protonhax` file and add to the second line
 ```sh
-set -x
-exec >/tmp/protonhax.$$.log 2>&1
-```
-It will save *protonhax* debug log into `/tmp/protonhax.*.log`
-
-### $PATH
-
-Make sure *protonhax* is in your $PATH.
-
-Open a terminal and run `protonhax`, if you do not see instructions, go back to the installation process.
-
-If your game does not start, make sure Steam can see and access your **$PATH**. 
-
-Depending on how you install and execute Steam, Steam will only have access to a few locations. Like using **distrobox** or **flatpak**. Please check the issues page for `flatpak` workaround.
-
-If your Steam is host installed,  starting  Steam from a terminal will make sure it can see your $PATH
-
-### Steam
-
-You can check Steam's log - location will vary depending on how you installed it (check their docs). Or start Steam from a terminal and look for the messages.
-
-When you run *protonhax*, e.g. `protonhax cmd 12345*, you should see in the logs :
-
-```
-Adding process 44444 for gameID 12345
-Adding process 44445 for gameID 12345
+chmod 755 protonhax
 ```
 
-The process number will vary, and gameID will match to your game.
+For example, install it at `$HOME/.local/bin/protonhax`. Make sure the launcher can access that location. Flatpak installations may need additional filesystem permissions.
 
-### Proper file path - CMD
+## Troubleshooting
 
-You might be having indications that `protonhax` cannot find the program you are trying to execute. That can be an issue with file path solving. 
-
-Try to run `protonhax cmd 12345`to confirm if it works.
-
-If it works, you might want to try to store your program in a path with no spaces and special characters, and pass the full path to `protonhax` to make sure.
-
-### Issues page.
-
-You can check the issue pages for similar problems, and don't be shy to open one in case you need help troubleshooting. It always helps to make *protonhax* better.
+- Run `protonhax ls` while the game is running to see whether initialization succeeded.
+- If the game does not launch with the wrapper enabled, remove the wrapper and confirm the game works without it.
+- If Proton detection fails, confirm the selected Heroic runner is Proton rather than Wine.
 
 ## Contributing
-Contributions are always welcome! Especially if they are packages for other distributions.
 
-## Running programs BEFORE the game.
-
-Protonhax is not necessary, you can set your launch options to switch paths. Example:
-
-`eval $(echo "protonhax init %command%" | sed "s|path/to/game.exe|path/to/your.exe|")`
-[More](https://github.com/jcnils/protonhax/issues/5#issuecomment-2053773221)
-
-## TODO
-
-- [ ] Flatpak version for Steam Flatpak
-- [ ] Nix Packages
-- [ ] Packages for other Linux distributions.
-- [ ] New repo for *protonhax* GUI
+Contributions are welcome, especially compatibility reports and packaging for additional distributions.

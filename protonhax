@@ -4,16 +4,16 @@ phd=${XDG_RUNTIME_DIR:-/run/user/$UID}/protonhax
 
 usage() {
     echo "Usage:"
-    echo "protonhax init <cmd>"
-    printf "\tShould only be called by Steam with \"protonhax init %%COMMAND%%\"\n"
+    echo "protonhax init <launch-command> [args...]"
+    printf "\\tWrap a Steam game or a launcher command that invokes Proton\n"
     echo "protonhax ls"
-    printf "\tLists all currently running games\n"
-    echo "protonhax run <appid> <cmd>"
-    printf "\tRuns <cmd> in the context of <appid> with proton\n"
+    printf "\\tLists all currently running games\n"
+    echo "protonhax run <appid> <cmd> [args...]"
+    printf "\\tRuns <cmd> in the context of <appid> with Proton\n"
     echo "protonhax cmd <appid>"
-    printf "\tRuns cmd.exe in the context of <appid>\n"
-    echo "protonhax exec <appid> <cmd>"
-    printf "\tRuns <cmd> in the context of <appid>\n"
+    printf "\\tRuns cmd.exe in the context of <appid>\n"
+    echo "protonhax exec <appid> <cmd> [args...]"
+    printf "\\tRuns <cmd> in the context of <appid>\n"
 }
 
 if [[ $# -lt 1 ]]; then
@@ -25,53 +25,130 @@ c=$1
 shift
 
 if [[ "$c" == "init" ]]; then
-    mkdir -p $phd/$SteamAppId
-    printf "%s\n" "${@}" | grep -m 1 "/proton" > $phd/$SteamAppId/exe
-    printf "%s" "$STEAM_COMPAT_DATA_PATH/pfx" > $phd/$SteamAppId/pfx
-    declare -px > $phd/$SteamAppId/env
+    if [[ $# -lt 1 ]]; then
+        echo "protonhax: init requires the launch command and its arguments." >&2
+        usage
+        exit 1
+    fi
+
+    # Heroic sets WINEPREFIX to the prefix itself. Steam commonly sets
+    # STEAM_COMPAT_DATA_PATH to a compatdata directory containing pfx/.
+    prefix=${WINEPREFIX:-}
+    compat_data_path=${STEAM_COMPAT_DATA_PATH:-}
+    if [[ -z "$prefix" && -n "$compat_data_path" ]]; then
+        if [[ -d "$compat_data_path/pfx" ]]; then
+            prefix="$compat_data_path/pfx"
+        else
+            prefix="$compat_data_path"
+        fi
+    fi
+    if [[ -z "$prefix" ]]; then
+        echo "protonhax: no Proton prefix found (WINEPREFIX or STEAM_COMPAT_DATA_PATH is missing)." >&2
+        exit 1
+    fi
+
+    # Heroic can set SteamAppId=0; prefer its SteamGameId in that case.
+    game_id=${HEROIC_APP_ID:-${HEROIC_GAME_ID:-}}
+    if [[ -z "$game_id" && -n "${SteamAppId:-}" && "$SteamAppId" != "0" ]]; then
+        game_id="$SteamAppId"
+    fi
+    if [[ -z "$game_id" && -n "${SteamGameId:-}" && "$SteamGameId" != "0" ]]; then
+        game_id="$SteamGameId"
+    fi
+    if [[ -z "$game_id" ]]; then
+        game_id=$(printf '%s' "$prefix" | cksum | awk '{print "nonsteam-" $1}')
+    fi
+    game_id=${game_id//[^a-zA-Z0-9_.-]/_}
+
+    proton_exe=""
+    # Heroic exports PROTONPATH as the selected Proton installation directory.
+    # Accept either that directory or a direct path to the proton executable.
+    if [[ -n "${PROTONPATH:-}" ]]; then
+        if [[ -x "$PROTONPATH" && -f "$PROTONPATH" ]]; then
+            proton_exe="$PROTONPATH"
+        elif [[ -x "$PROTONPATH/proton" && -f "$PROTONPATH/proton" ]]; then
+            proton_exe="$PROTONPATH/proton"
+        fi
+    fi
+
+    # Fall back to launch arguments for launchers that don't export PROTONPATH.
+    if [[ -z "$proton_exe" ]]; then
+        for arg in "$@"; do
+            case "$arg" in
+                */proton|*/proton-*)
+                    if [[ -x "$arg" && -f "$arg" ]]; then
+                        proton_exe=$arg
+                        break
+                    fi
+                    ;;
+            esac
+
+            # Some launchers embed the Proton invocation in a wrapper string.
+            candidate=$(printf '%s\n' "$arg" | sed -n "s/.*'\\(.*\\/proton\\)'.*/\\1/p")
+            if [[ -z "$candidate" ]]; then
+                candidate=$(printf '%s\n' "$arg" | sed -n 's/.*"\\(.*\\/proton\\)".*/\\1/p')
+            fi
+            if [[ -n "$candidate" && -x "$candidate" && -f "$candidate" ]]; then
+                proton_exe=$candidate
+                break
+            fi
+        done
+    fi
+
+    if [[ -z "$proton_exe" ]]; then
+        echo "protonhax: could not locate Proton (checked PROTONPATH and launch arguments)." >&2
+        echo "If using Heroic, confirm the selected runner is Proton and the game's wrapper command is 'protonhax' with arguments 'init'." >&2
+        exit 1
+    fi
+
+    game_dir="$phd/$game_id"
+    mkdir -p -- "$game_dir" || exit 1
+    printf '%s' "$proton_exe" > "$game_dir/exe"
+    printf '%s' "$prefix" > "$game_dir/pfx"
+    SteamAppId=$game_id
+    export SteamAppId
+    declare -px > "$game_dir/env"
+
+    cleanup() { rm -rf -- "$game_dir"; }
+    trap cleanup EXIT
+
     "$@"
     ec=$?
-    rm -r $phd/$SteamAppId
-    exit $ec
+    exit "$ec"
 elif [[ "$c" == "ls" ]]; then
-    if [[ -d $phd ]]; then
-        ls -1 $phd
+    if [[ -d "$phd" ]]; then
+        ls -1 -- "$phd"
     fi
 elif [[ "$c" == "run" ]] || [[ "$c" == "cmd" ]] || [[ "$c" == "exec" ]]; then
     if [[ $# -lt 1 ]]; then
         usage
         exit 1
     fi
-    if [[ ! -d $phd ]]; then
-        printf "No app running with appid \"%s\"\n" "$1"
-        exit 2
-    fi
-    if [[ ! -d $phd/$1 ]]; then
-        printf "No app running with appid \"%s\"\n" "$1"
-        exit 2
-    fi
-    SteamAppId=$1
+    game_id=$1
     shift
+    game_dir="$phd/$game_id"
+    if [[ ! -d "$game_dir" ]]; then
+        printf 'No app running with appid "%s"\\n' "$game_id"
+        exit 2
+    fi
 
-    source $phd/$SteamAppId/env
+    source "$game_dir/env"
+    SteamAppId=$game_id
+    export SteamAppId
+    proton_exe=$(cat "$game_dir/exe")
+    prefix=$(cat "$game_dir/pfx")
 
     if [[ "$c" == "run" ]]; then
-        if [[ $# -lt 1 ]]; then
-            usage
-            exit 1
-        fi
-        exec "$(cat $phd/$SteamAppId/exe)" run "$@"
+        [[ $# -ge 1 ]] || { usage; exit 1; }
+        exec "$proton_exe" run "$@"
     elif [[ "$c" == "cmd" ]]; then
-        exec "$(cat $phd/$SteamAppId/exe)" run "$(cat $phd/$SteamAppId/pfx)/drive_c/windows/system32/cmd.exe"
-    elif [[ "$c" == "exec" ]]; then
-        if [[ $# -lt 1 ]]; then
-            usage
-            exit 1
-        fi
+        exec "$proton_exe" run "$prefix/drive_c/windows/system32/cmd.exe"
+    else
+        [[ $# -ge 1 ]] || { usage; exit 1; }
         exec "$@"
     fi
 else
-    printf "Unknown command %s\n" "$c"
+    printf 'Unknown command %s\\n' "$c"
     usage
     exit 1
 fi
