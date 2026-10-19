@@ -47,9 +47,9 @@ run_logged() {
         return 1
     fi
     printf '\n[%s] protonhax %s\n' "$(date '+%Y-%m-%d %H:%M:%S %z')" "$c" >> "$log_file"
-    [[ -n \${game_id:-} ]] && printf 'appid=%s\n' "$game_id" >> "$log_file"
-    [[ -n \${prefix:-} ]] && printf 'prefix=%s\n' "$prefix" >> "$log_file"
-    [[ -n \${proton_exe:-} ]] && printf 'proton=%s\n' "$proton_exe" >> "$log_file"
+    [[ -n ${game_id:-} ]] && printf 'appid=%s\n' "$game_id" >> "$log_file"
+    [[ -n ${prefix:-} ]] && printf 'prefix=%s\n' "$prefix" >> "$log_file"
+    [[ -n ${proton_exe:-} ]] && printf 'proton=%s\n' "$proton_exe" >> "$log_file"
     "$@" 2>&1 | tee -a "$log_file"
     local command_status=${PIPESTATUS[0]}
     return "$command_status"
