@@ -4,30 +4,45 @@ phd=${XDG_RUNTIME_DIR:-/run/user/$UID}/protonhax
 
 usage() {
     echo "Usage:"
-    echo "protonhax [--log <file>] init <launch-command> [args...]"
+    echo "protonhax [--log <file>] [--diagnostics] init <launch-command> [args...]"
     printf "\\tWrap a Steam game or a launcher command that invokes Proton\n"
-    echo "protonhax [--log <file>] ls"
+    echo "protonhax [--log <file>] [--diagnostics] ls"
     printf "\\tLists all currently running games\n"
-    echo "protonhax [--log <file>] run <appid> <cmd> [args...]"
+    echo "protonhax [--log <file>] [--diagnostics] run <appid> <cmd> [args...]"
     printf "\\tRuns <cmd> in the context of <appid> with Proton\n"
-    echo "protonhax [--log <file>] cmd <appid>"
+    echo "protonhax [--log <file>] [--diagnostics] cmd <appid>"
     printf "\\tRuns cmd.exe in the context of <appid>\n"
-    echo "protonhax [--log <file>] exec <appid> <cmd> [args...]"
+    echo "protonhax [--log <file>] [--diagnostics] exec <appid> <cmd> [args...]"
     printf "\\tRuns <cmd> in the context of <appid>\n"
     echo
     echo "Alternatively, set PROTONHAX_LOG=<file> to log all protonhax-launched output."
+    echo "Use --diagnostics to enable Proton logging and selected Wine crash/debug channels."
+    echo "Set PROTONHAX_WINEDEBUG to override the WINEDEBUG channels used by --diagnostics."
 }
 
 log_file=${PROTONHAX_LOG:-}
-if [[ "${1:-}" == "--log" ]]; then
-    if [[ $# -lt 3 || -z "$2" ]]; then
-        echo "protonhax: --log requires a file path and a command." >&2
-        usage
-        exit 1
+diagnostics=${PROTONHAX_DIAGNOSTICS:-0}
+while [[ "${1:-}" == "--log" || "${1:-}" == "--diagnostics" ]]; do
+    if [[ "$1" == "--diagnostics" ]]; then
+        diagnostics=1
+        shift
+    else
+        if [[ $# -lt 3 || -z "${2:-}" ]]; then
+            echo "protonhax: --log requires a file path and a command." >&2
+            usage
+            exit 1
+        fi
+        log_file=$2
+        shift 2
     fi
-    log_file=$2
-    shift 2
-fi
+done
+
+enable_diagnostics() {
+    if [[ "$diagnostics" == "1" || "$diagnostics" == "true" ]]; then
+        export PROTON_LOG=1
+        export WINEDEBUG="${PROTONHAX_WINEDEBUG:-+timestamp,+pid,+tid,+seh,+unwind}"
+    fi
+}
 
 if [[ $# -lt 1 ]]; then
     usage
@@ -138,6 +153,7 @@ if [[ "$c" == "init" ]]; then
     printf '%s' "$prefix" > "$game_dir/pfx"
     SteamAppId=$game_id
     export SteamAppId
+    enable_diagnostics
     declare -px > "$game_dir/env"
 
     cleanup() { rm -rf -- "$game_dir"; }
@@ -165,6 +181,7 @@ elif [[ "$c" == "run" ]] || [[ "$c" == "cmd" ]] || [[ "$c" == "exec" ]]; then
     fi
 
     source "$game_dir/env"
+    enable_diagnostics
     SteamAppId=$game_id
     export SteamAppId
     proton_exe=$(cat "$game_dir/exe")
