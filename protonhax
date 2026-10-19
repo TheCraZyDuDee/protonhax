@@ -145,7 +145,8 @@ if [[ "$c" == "init" ]]; then
     exit "$ec"
 elif [[ "$c" == "ls" ]]; then
     if [[ -d "$phd" ]]; then
-        ls -1 -- "$phd"
+        run_logged ls -1 -- "$phd"
+        exit $?
     fi
 elif [[ "$c" == "run" ]] || [[ "$c" == "cmd" ]] || [[ "$c" == "exec" ]]; then
     if [[ $# -lt 1 ]]; then
