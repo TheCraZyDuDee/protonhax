@@ -53,7 +53,25 @@ protonhax --log "$HOME/protonhax.log" init %COMMAND%
 
 Alternatively, set `PROTONHAX_LOG` to a log-file path in the launch environment to enable logging without repeating the option. This is useful for launchers where the wrapper command is configured separately.
 
-Logging captures the output emitted by the launched command and Proton wrapper. It cannot capture errors that are written only to separate files by the game, launcher, driver, or anti-cheat system; those may require their own logs.
+### Enable Proton/Wine diagnostics
+
+Capturing stdout/stderr alone does not enable Wine's debug output. Add `--diagnostics` before the command to enable Proton's own log and selected Wine exception/unwind diagnostics:
+
+```sh
+protonhax --log "$HOME/protonhax.log" --diagnostics init %COMMAND%
+```
+
+For a helper program launched while the game is running:
+
+```sh
+protonhax --log "$HOME/protonhax-helper.log" --diagnostics run <id> "C:/path/to/program.exe"
+```
+
+This sets `PROTON_LOG=1` and defaults `WINEDEBUG` to `+timestamp,+pid,+tid,+seh,+unwind`. Proton typically writes an additional `steam-<appid>.log` file in the home directory; this is separate from the protonhax log. Non-Steam IDs and different Proton builds may affect the filename or behavior, so check the Proton log location after a test launch.
+
+To request more Wine detail, set `PROTONHAX_WINEDEBUG` before running protonhax, for example `PROTONHAX_WINEDEBUG=+all`. **Use `+all` only for short troubleshooting sessions:** it can create very large logs and substantially slow the program. Diagnostics are opt-in because they can affect performance and produce large files.
+
+The protonhax log captures output emitted by the launched command and Proton wrapper. It cannot automatically combine separate Proton log files or capture errors written only to separate files by the game, launcher, graphics driver, or anti-cheat system; inspect those separately when needed. Logs may contain usernames, paths, command arguments, and other sensitive details.
 
 ## Installation
 
