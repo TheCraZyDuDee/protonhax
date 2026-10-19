@@ -35,6 +35,26 @@ For Proton games, Heroic exports `PROTONPATH` and prefix-related environment var
 
 Use full executable paths; these commands do not resolve programs through `PATH`.
 
+## Logging and troubleshooting
+
+To capture stdout and stderr from a game launched through `init`, or from helper programs launched with `run`, `cmd`, or `exec`, pass `--log <file>` before the command:
+
+```sh
+protonhax --log "$HOME/protonhax.log" run <id> "C:/path/to/program.exe"
+```
+
+Output is also shown in the terminal. The log is appended to, includes a timestamp and command type, and the launched program's exit status is preserved. Use a writable path with enough disk space; logs can contain sensitive paths, application output, or diagnostic details.
+
+For game launch logging, add the option before `init` in Steam Launch Options, keeping Steam's command token at the end:
+
+```sh
+protonhax --log "$HOME/protonhax.log" init %COMMAND%
+```
+
+Alternatively, set `PROTONHAX_LOG` to a log-file path in the launch environment to enable logging without repeating the option. This is useful for launchers where the wrapper command is configured separately.
+
+Logging captures the output emitted by the launched command and Proton wrapper. It cannot capture errors that are written only to separate files by the game, launcher, driver, or anti-cheat system; those may require their own logs.
+
 ## Installation
 
 `protonhax` is a single Bash script. Copy it to a directory on your `PATH` and make it executable:
